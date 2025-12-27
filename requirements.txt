@@ -1,0 +1,4 @@
+flask
+pdfplumber
+python-multipart
+spacy
