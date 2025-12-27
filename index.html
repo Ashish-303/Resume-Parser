@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Resume Parser | ATS Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+        margin: 0;
+        padding: 40px 16px;
+        color: #0f172a;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: auto;
+    }
+
+    h1 {
+        font-size: 2.2rem;
+        text-align: center;
+        margin-bottom: 6px;
+        letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+        text-align: center;
+        color: #475569;
+        margin-bottom: 36px;
+        font-size: 1rem;
+    }
+
+    .card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 28px;
+        margin-bottom: 28px;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+        border: 1px solid #e5e7eb;
+    }
+
+    input[type="file"] {
+        width: 100%;
+        padding: 16px;
+        border: 2px dashed #94a3b8;
+        border-radius: 12px;
+        background: #f8fafc;
+        margin-bottom: 18px;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+
+    input[type="file"]:hover {
+        background: #eef2ff;
+        border-color: #6366f1;
+    }
+
+    button {
+        padding: 16px 24px;
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        width: 100%;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+    }
+
+    button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
+    }
+
+    button:disabled {
+        background: #94a3b8;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    .score-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+    }
+
+    .score {
+        font-size: 3rem;
+        font-weight: 700;
+    }
+
+    pre {
+        background: #0f172a;
+        color: #e5e7eb;
+        padding: 18px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        overflow-x: auto;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 18px;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    th, td {
+        padding: 14px 12px;
+        font-size: 0.9rem;
+    }
+
+    th {
+        background: #0f172a;
+        color: #e5e7eb;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+
+    td {
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    tr:hover td {
+        background: #f1f5f9;
+    }
+
+    .hidden {
+        display: none;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>Resume Parser</h1>
+<p class="subtitle">ATS-style resume parsing for recruiters</p>
+
+<div class="card">
+    <form id="uploadForm">
+        <input type="file" name="resume" accept=".pdf" required>
+        <button type="submit" id="submitBtn">Parse Resume</button>
+    </form>
+</div>
+
+<div class="card hidden" id="atsCard">
+    <h3>ATS Score</h3>
+
+    <div class="score-box">
+        <div class="score" id="atsScore">0%</div>
+        <div id="atsText">Based on completeness and skills</div>
+    </div>
+</div>
+
+<div class="card hidden" id="jsonCard">
+    <h3>Parsed Resume Output</h3>
+    <pre id="jsonOutput"></pre>
+</div>
+
+<div class="card hidden" id="tableCard">
+    <h3>Candidate Overview (HR View)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Skills</th>
+                <th>ATS Score</th>
+            </tr>
+        </thead>
+        <tbody id="candidateTable"></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+
+function calculateATSScore(data) {
+    let score = 0;
+
+    const skills = data.skills || [];
+    const email = data.basic_info?.email;
+    const phone = data.basic_info?.phone;
+
+    const skillCount = skills.length;
+    if (skillCount >= 8) score += 55;
+    else if (skillCount >= 5) score += 45;
+    else if (skillCount >= 3) score += 30;
+    else if (skillCount >= 1) score += 15;
+
+    if (email) score += 10;
+    if (phone) score += 10;
+
+    const lowerSkills = skills.map(s => s.toLowerCase());
+
+    const categories = {
+        programming: ["python", "java", "javascript", "c++", "c", "typescript"],
+        data: ["machine learning", "ml", "deep learning", "sql", "mongodb", "data"],
+        devops: ["docker", "kubernetes", "ci", "cd", "git"],
+        frameworks: ["react", "django", "flask", "node"]
+    };
+
+    let diversity = 0;
+    for (const group of Object.values(categories)) {
+        if (group.some(skill => lowerSkills.includes(skill)))
+            diversity += 5;
+    }
+
+    score += Math.min(diversity, 15);
+
+    if (score > 100) score = 100;
+    if (score < 10) score = 10;
+
+    return Math.round(score);
+}
+
+function setScoreColor(value) {
+    const scoreEl = document.getElementById("atsScore");
+
+    if (value >= 80) scoreEl.style.color = "#16a34a";
+    else if (value >= 50) scoreEl.style.color = "#ca8a04";
+    else scoreEl.style.color = "#dc2626";
+}
+
+const form = document.getElementById("uploadForm");
+const btn = document.getElementById("submitBtn");
+const atsCard = document.getElementById("atsCard");
+const jsonCard = document.getElementById("jsonCard");
+const tableCard = document.getElementById("tableCard");
+const jsonOutput = document.getElementById("jsonOutput");
+const atsScoreEl = document.getElementById("atsScore");
+const tableBody = document.getElementById("candidateTable");
+
+form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    btn.disabled = true;
+    btn.textContent = "Parsing...";
+
+    const formData = new FormData(form);
+    const response = await fetch("/upload", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await response.json();
+
+    jsonOutput.textContent = JSON.stringify(data, null, 2);
+    jsonCard.classList.remove("hidden");
+
+    const atsScore = calculateATSScore(data);
+    atsScoreEl.textContent = atsScore + "%";
+    setScoreColor(atsScore);
+    atsCard.classList.remove("hidden");
+
+    const row = document.createElement("tr");
+    row.innerHTML = `
+        <td>${data.basic_info?.name || "N/A"}</td>
+        <td>${data.basic_info?.email || "N/A"}</td>
+        <td>${data.basic_info?.phone || "N/A"}</td>
+        <td>${data.skills?.join(", ") || "N/A"}</td>
+        <td>${atsScore}%</td>
+    `;
+
+    tableBody.appendChild(row);
+    tableCard.classList.remove("hidden");
+
+    btn.disabled = false;
+    btn.textContent = "Parse Resume";
+});
+</script>
+
+</body>
+</html>
